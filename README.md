@@ -6,6 +6,8 @@
 
 [English](README.en.md) · [下载最新版](https://github.com/kyox215/CurrentFlow/releases/latest) · [更新记录](CHANGELOG.md) · [MIT 许可证](LICENSE)
 
+**最新版本 [v0.7.4](https://github.com/kyox215/CurrentFlow/releases/tag/v0.7.4)**：设置已移除“演示”和“实时硬件数据”入口，正常运行自动读取硬件。近期更新还加入了整机功耗 W 趋势、详情自动展开，并将两位整数功耗时的菜单栏宽度从 92pt 缩至本机实测约 73pt。[查看中文更新介绍稿](docs/updates/0.7.4.zh-CN.txt)。
+
 ![CurrentFlow 三节点面板，图中为演示数据](docs/preview.png)
 
 > 预览图和动图使用明确标注的演示数据。安装后的 App 默认读取真实硬件。
@@ -102,7 +104,7 @@ build/电流脉动.app/Contents/MacOS/CurrentFlow --render-preview artifacts
 | `Tests/` | 解析、布局、采样、刷新与启动行为检查 |
 | `scripts/` | 构建、图标生成与测试脚本 |
 | `Resources/` | 随 App 打包的使用说明 |
-| `docs/` | 使用演示数据生成的预览和动图 |
+| `docs/` | 使用演示数据生成的预览、动图及更新介绍稿 |
 
 欢迎提交 [Issue](https://github.com/kyox215/CurrentFlow/issues) 或 Pull Request，见 [贡献指南](CONTRIBUTING.md)。报告硬件兼容性时请提供 macOS 版本、芯片型号和数据来源标注，不要上传电池序列号或完整 IORegistry 导出。
 

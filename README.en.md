@@ -6,6 +6,8 @@ A native SwiftUI menu bar app with a compact 420 × 300 light panel. Live system
 
 [中文](README.md) · [Download](https://github.com/kyox215/CurrentFlow/releases/latest) · [MIT License](LICENSE)
 
+**Latest: [v0.7.4](https://github.com/kyox215/CurrentFlow/releases/tag/v0.7.4).** Settings now omits the Demo and Live Hardware Data actions; normal operation reads hardware automatically. Recent releases also added a whole-system watt trend, automatic detail expansion, and a smaller menu bar item measuring about 73pt on the tested Mac for two-digit watt readings, down from 92pt. [Chinese update copy](docs/updates/0.7.4.zh-CN.txt).
+
 ![CurrentFlow panel using explicitly labeled demo data](docs/preview.png)
 
 ## Features
