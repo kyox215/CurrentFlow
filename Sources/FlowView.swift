@@ -1,6 +1,15 @@
 import SwiftUI
 import AppKit
 
+private enum PanelRegion: Hashable { case content, footer }
+
+private struct PanelHeightKey: PreferenceKey {
+    static var defaultValue: [PanelRegion: CGFloat] = [:]
+    static func reduce(value: inout [PanelRegion: CGFloat], nextValue: () -> [PanelRegion: CGFloat]) {
+        value.merge(nextValue(), uniquingKeysWith: { _, next in next })
+    }
+}
+
 enum FlowStyle {
     static let aqua = Color(red: 0.02, green: 0.56, blue: 0.37)
     static let blue = Color(red: 0.16, green: 0.40, blue: 0.84)
@@ -23,6 +32,7 @@ struct FlowPanel: View {
     @StateObject private var startup = StartupSettings()
     @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
     var staticPreview = false
+    var onSizeChange: (CGSize) -> Void = { _ in }
     let quit: () -> Void
 
     private var s: PowerSnapshot { monitor.snapshot }
@@ -46,6 +56,7 @@ struct FlowPanel: View {
                             .onChange(of: showCustomInterval) { visible in
                                 if visible { proxy.scrollTo("top", anchor: .top) }
                             }
+                            .onChange(of: showDetails) { _ in proxy.scrollTo("top", anchor: .top) }
                         }
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                         .clipped()
@@ -60,6 +71,10 @@ struct FlowPanel: View {
         .tint(FlowStyle.blue)
         .clipShape(RoundedRectangle(cornerRadius: 14))
         .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(FlowStyle.line.opacity(0.75)))
+        .onPreferenceChange(PanelHeightKey.self) { heights in
+            guard let content = heights[.content], let footer = heights[.footer] else { return }
+            onSizeChange(PanelPlacement.sizeForContent(contentHeight: content, footerHeight: footer))
+        }
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in startup.refresh() }
         .alert("开机自启设置", isPresented: Binding(get: { startup.notice != nil }, set: { if !$0 { startup.notice = nil } })) {
             if startup.state == .requiresApproval {
@@ -108,6 +123,9 @@ struct FlowPanel: View {
             if showDetails { details }
         }
         .padding(12).frame(width: width, alignment: .topLeading)
+        .background(GeometryReader { geometry in
+            Color.clear.preference(key: PanelHeightKey.self, value: [.content: geometry.size.height])
+        })
     }
 
     private var customRefreshRow: some View {
@@ -137,15 +155,17 @@ struct FlowPanel: View {
 
     private var details: some View {
         VStack(alignment: .leading, spacing: 9) {
-            Text("电池电流 · 最近 60 秒").font(.system(size: 10, weight: .medium))
+            HStack {
+                Text("电池电流 · A").font(.system(size: 10, weight: .medium))
+                Spacer()
+                Text("近 1 分钟").font(.system(size: 9))
+            }
             CurrentChart(values: monitor.history).frame(height: 42)
-            detailRow("输入功率 / 电压", reading(s.inputWatts, unit: "W", digits: 1) + " / " + reading(s.inputVolts, unit: "V"))
-            detailRow("电池功率 / 电压", reading(s.batteryWatts, unit: "W", digits: 1) + " / " + reading(s.batteryVolts, unit: "V"))
             detailRow("电源功率上限", reading(s.adapterRatedWatts, unit: "W", digits: 0))
-            detailRow("电池读数", s.batterySource.title)
-            detailRow("电源读数", s.inputSource.title)
-            Text("电源与电池电压不同，电流不能直接相减；传感器可能延迟更新。")
-                .font(.system(size: 9)).fixedSize(horizontal: false, vertical: true)
+            if !s.liveCurrents && monitor.demoMode == nil {
+                Label("部分读数来自系统缓存", systemImage: "clock")
+                    .font(.system(size: 9)).fixedSize(horizontal: false, vertical: true)
+            }
         }.font(.system(size: 9)).foregroundStyle(FlowStyle.muted)
             .padding(10).background(FlowStyle.surface, in: RoundedRectangle(cornerRadius: 10))
     }
@@ -184,10 +204,12 @@ struct FlowPanel: View {
                     Spacer(minLength: 0)
                     Button { showDetails.toggle() } label: {
                         HStack(spacing: 4) {
-                            Text("详情")
+                            Text(showDetails ? "收起" : "详情")
                             Image(systemName: showDetails ? "chevron.up" : "chevron.down").font(.system(size: 8))
                         }
                     }.buttonStyle(.plain)
+                        .accessibilityValue(showDetails ? "已展开" : "已收起")
+                        .help(showDetails ? "收起电流趋势" : "展开电流趋势和电源功率上限")
                     Menu {
                         Toggle(startup.menuTitle, isOn: Binding(get: { startup.registered }, set: { startup.setEnabled($0) }))
                         Toggle("启动时展开面板", isOn: $showOnLaunch)
@@ -212,6 +234,9 @@ struct FlowPanel: View {
             .font(.system(size: 10)).foregroundStyle(FlowStyle.muted)
             .padding(.horizontal, 14).padding(.vertical, 11)
         }.background(FlowStyle.background)
+            .background(GeometryReader { geometry in
+                Color.clear.preference(key: PanelHeightKey.self, value: [.footer: geometry.size.height])
+            })
     }
 
     private func detailRow(_ title: String, _ value: String) -> some View {

@@ -9,7 +9,7 @@ bash scripts/test.sh
 bash scripts/build.sh
 ```
 
-界面修改请同时检查充电、放电、待机和共同供电演示，并确认 420 × 300 面板、详情滚动与刘海避让正常。可用 `--render-preview artifacts` 生成预览。
+界面修改请同时检查充电、放电、待机和共同供电演示，并确认 420 × 300 紧凑面板、详情自动增高和收起、空间不足时的滚动与刘海避让正常。可用 `--render-preview artifacts` 生成预览。
 
 `build/` 和 `artifacts/` 不提交到 Git；公开演示图片使用 `docs/`，并明确标注演示数据。
 

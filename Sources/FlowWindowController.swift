@@ -18,6 +18,8 @@ final class FlowWindowController: NSObject, NSWindowDelegate {
     private var screenObserver: NSObjectProtocol?
     private var lastAnchor: CGRect?
     private var lastScreen: NSScreen?
+    private var requestedSize = PanelPlacement.preferredSize
+    private var resizeScheduled = false
     private let diagnosticURL: URL?
     var isVisible: Bool { window.isVisible }
 
@@ -61,6 +63,9 @@ final class FlowWindowController: NSObject, NSWindowDelegate {
             hostingView.topAnchor.constraint(equalTo: container.topAnchor),
             hostingView.bottomAnchor.constraint(equalTo: container.bottomAnchor)
         ])
+        hostingView.rootView = FlowPanel(monitor: monitor, onSizeChange: { [weak self] size in
+            self?.requestSize(size)
+        }, quit: quit)
 
         outsideClickMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [weak self] _ in
             MainActor.assumeIsolated { self?.hide() }
@@ -104,8 +109,24 @@ final class FlowWindowController: NSObject, NSWindowDelegate {
         lastScreen = screen
         lastAnchor = anchor
         let safe = PanelPlacement.safeBounds(screen: screen.frame, visible: screen.visibleFrame, safeTop: screen.safeAreaInsets.top)
-        window.setFrame(PanelPlacement.frame(in: safe, anchor: anchor), display: true, animate: false)
+        window.setFrame(PanelPlacement.frame(in: safe, anchor: anchor, desired: requestedSize), display: true, animate: false)
         window.contentView?.layoutSubtreeIfNeeded()
+    }
+
+    private func requestSize(_ size: CGSize) {
+        guard size != requestedSize else { return }
+        requestedSize = size
+        guard !resizeScheduled else { return }
+        resizeScheduled = true
+        // Apply the measured size after SwiftUI finishes its current layout pass.
+        // The native panel still owns its frame; intrinsic hosting constraints stay disabled.
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            self.resizeScheduled = false
+            guard self.isVisible, let screen = self.window.screen ?? self.lastScreen else { return }
+            self.place(on: screen, anchor: self.lastAnchor)
+            self.recordLayout()
+        }
     }
 
     func hide() {
@@ -141,6 +162,7 @@ final class FlowWindowController: NSObject, NSWindowDelegate {
             "sampleCount": monitor.sampleCount,
             "menuTitle": menuTitle ?? "",
             "windowVisible": isVisible,
+            "requestedSize": ["width": requestedSize.width, "height": requestedSize.height],
             "batteryAmps": monitor.snapshot.batteryAmps as Any? ?? NSNull(),
             "inputAmps": monitor.snapshot.inputAmps as Any? ?? NSNull(),
             "systemWatts": monitor.snapshot.systemWatts as Any? ?? NSNull(),

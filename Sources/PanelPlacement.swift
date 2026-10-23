@@ -4,6 +4,13 @@ import CoreGraphics
 enum PanelPlacement {
     static let preferredSize = CGSize(width: 420, height: 300)
 
+    static func sizeForContent(contentHeight: CGFloat, footerHeight: CGFloat) -> CGSize {
+        guard contentHeight.isFinite, footerHeight.isFinite,
+              contentHeight > 0, footerHeight > 0,
+              (contentHeight + footerHeight).isFinite else { return preferredSize }
+        return CGSize(width: preferredSize.width, height: ceil(max(preferredSize.height, contentHeight + footerHeight)))
+    }
+
     // All rectangles are global AppKit coordinates; a second display can have
     // a negative origin. visibleFrame already excludes the menu bar and Dock.
     static func safeBounds(screen: CGRect, visible: CGRect, safeTop: CGFloat, margin: CGFloat = 10) -> CGRect {
