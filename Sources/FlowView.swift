@@ -1,0 +1,248 @@
+import SwiftUI
+import AppKit
+
+enum FlowStyle {
+    static let aqua = Color(red: 0.02, green: 0.56, blue: 0.37)
+    static let blue = Color(red: 0.16, green: 0.40, blue: 0.84)
+    static let amber = Color(red: 0.80, green: 0.43, blue: 0.09)
+    static let ink = Color(red: 0.13, green: 0.17, blue: 0.22)
+    static let muted = Color(red: 0.45, green: 0.49, blue: 0.55)
+    static let background = Color.white
+    static let surface = Color(red: 0.96, green: 0.97, blue: 0.985)
+    static let line = Color(red: 0.86, green: 0.89, blue: 0.92)
+}
+
+struct FlowPanel: View {
+    @ObservedObject var monitor: PowerMonitor
+    @State private var showDetails = false
+    @State private var showCustomInterval = false
+    @State private var customInterval = "1"
+    @State private var invalidInterval = false
+    @AppStorage("reduceFlowMotion") private var reduceMotion = false
+    @AppStorage(StartupPolicy.showOnLaunchKey) private var showOnLaunch = false
+    @StateObject private var startup = StartupSettings()
+    @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
+    var staticPreview = false
+    let quit: () -> Void
+
+    private var s: PowerSnapshot { monitor.snapshot }
+    private var batteryColor: Color { s.flow == .discharging ? FlowStyle.amber : FlowStyle.aqua }
+
+    var body: some View {
+        Group {
+            if staticPreview {
+                VStack(spacing: 0) {
+                    mainContent(width: PanelPlacement.preferredSize.width)
+                    Spacer(minLength: 0)
+                    footer
+                }.frame(width: PanelPlacement.preferredSize.width, height: PanelPlacement.preferredSize.height)
+            } else {
+                GeometryReader { geometry in
+                    VStack(spacing: 0) {
+                        ScrollViewReader { proxy in
+                            ScrollView(.vertical) {
+                                mainContent(width: geometry.size.width).id("top")
+                            }
+                            .onChange(of: showCustomInterval) { visible in
+                                if visible { proxy.scrollTo("top", anchor: .top) }
+                            }
+                        }
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .clipped()
+                        footer
+                    }.frame(width: geometry.size.width, height: geometry.size.height)
+                }
+            }
+        }
+        .foregroundStyle(FlowStyle.ink)
+        .background(FlowStyle.background)
+        .preferredColorScheme(.light)
+        .tint(FlowStyle.blue)
+        .clipShape(RoundedRectangle(cornerRadius: 14))
+        .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(FlowStyle.line.opacity(0.75)))
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in startup.refresh() }
+        .alert("开机自启设置", isPresented: Binding(get: { startup.notice != nil }, set: { if !$0 { startup.notice = nil } })) {
+            if startup.state == .requiresApproval {
+                Button("打开系统设置") { startup.openSystemSettings() }
+            }
+            Button("知道了", role: .cancel) { startup.notice = nil }
+        } message: { Text(startup.notice ?? "") }
+    }
+
+    private func mainContent(width: CGFloat) -> some View {
+        let diagramWidth = max(1, width - 24)
+        let scale = min(1, diagramWidth / FlowDiagram.designSize.width)
+        return VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 6) {
+                Image(systemName: "waveform.path").foregroundStyle(FlowStyle.aqua)
+                Text("电流脉动").font(.system(size: 13, weight: .semibold))
+                Spacer()
+                TimelineView(.periodic(from: .now, by: 1)) { timeline in
+                    HStack(spacing: 4) {
+                        Circle().fill(s.liveCurrents && monitor.demoMode == nil ? FlowStyle.aqua : FlowStyle.amber).frame(width: 4, height: 4)
+                        Text(monitor.demoMode == nil ? s.freshnessLabel(at: timeline.date, interval: monitor.refreshInterval) : "演示 · 非实测")
+                            .font(.system(size: 9)).monospacedDigit().foregroundStyle(FlowStyle.muted)
+                    }
+                }
+            }.frame(height: 22)
+
+            HStack {
+                Text(s.status).lineLimit(1).minimumScaleFactor(0.8)
+                Spacer(minLength: 5)
+                if let percent = s.percent {
+                    Image(systemName: s.flow == .charging ? "battery.100percent.bolt" : "battery.75percent")
+                    Text(String(format: "%.0f%%", percent)).monospacedDigit()
+                }
+            }.font(.system(size: 10, weight: .medium)).foregroundStyle(batteryColor)
+
+            if showCustomInterval { customRefreshRow }
+
+            FlowDiagram(snapshot: s, reduceMotion: reduceMotion || systemReduceMotion, paused: !monitor.panelVisible)
+                .scaleEffect(scale, anchor: .topLeading)
+                .frame(width: diagramWidth, height: FlowDiagram.designSize.height * scale, alignment: .topLeading)
+                .clipped()
+
+            if let error = s.error {
+                Text(error).font(.system(size: 10)).foregroundStyle(FlowStyle.amber).fixedSize(horizontal: false, vertical: true)
+            }
+            if showDetails { details }
+        }
+        .padding(12).frame(width: width, alignment: .topLeading)
+    }
+
+    private var customRefreshRow: some View {
+        VStack(alignment: .leading, spacing: 5) {
+            HStack(spacing: 7) {
+                Text("刷新间隔").font(.system(size: 10))
+                TextField("秒", text: $customInterval)
+                    .font(.system(size: 11)).textFieldStyle(.roundedBorder).frame(width: 67)
+                    .onSubmit(applyCustomInterval)
+                Text("秒").font(.system(size: 10)).foregroundStyle(FlowStyle.muted)
+                Spacer(minLength: 0)
+                Button("保存", action: applyCustomInterval).buttonStyle(.borderedProminent).controlSize(.mini)
+                Button { showCustomInterval = false; invalidInterval = false } label: { Image(systemName: "xmark") }
+                    .buttonStyle(.plain).font(.system(size: 9)).help("取消自定义刷新间隔")
+            }
+            Text(invalidInterval ? "请输入 0.5–300 秒之间的数字" : "支持 0.5–300 秒，设置会自动记住")
+                .font(.system(size: 9)).foregroundStyle(invalidInterval ? FlowStyle.amber : FlowStyle.muted)
+        }.padding(9).background(FlowStyle.surface, in: RoundedRectangle(cornerRadius: 9))
+    }
+
+    private func applyCustomInterval() {
+        guard let interval = RefreshPolicy.parse(customInterval) else { invalidInterval = true; return }
+        monitor.setRefreshInterval(interval)
+        invalidInterval = false
+        showCustomInterval = false
+    }
+
+    private var details: some View {
+        VStack(alignment: .leading, spacing: 9) {
+            Text("电池电流 · 最近 60 秒").font(.system(size: 10, weight: .medium))
+            CurrentChart(values: monitor.history).frame(height: 42)
+            detailRow("输入功率 / 电压", reading(s.inputWatts, unit: "W", digits: 1) + " / " + reading(s.inputVolts, unit: "V"))
+            detailRow("电池功率 / 电压", reading(s.batteryWatts, unit: "W", digits: 1) + " / " + reading(s.batteryVolts, unit: "V"))
+            detailRow("电源功率上限", reading(s.adapterRatedWatts, unit: "W", digits: 0))
+            detailRow("电池读数", s.batterySource.title)
+            detailRow("电源读数", s.inputSource.title)
+            Text("电源与电池电压不同，电流不能直接相减；传感器可能延迟更新。")
+                .font(.system(size: 9)).fixedSize(horizontal: false, vertical: true)
+        }.font(.system(size: 9)).foregroundStyle(FlowStyle.muted)
+            .padding(10).background(FlowStyle.surface, in: RoundedRectangle(cornerRadius: 10))
+    }
+
+    private var footer: some View {
+        VStack(spacing: 0) {
+            FlowStyle.line.opacity(0.7).frame(height: 0.5)
+            HStack(spacing: 12) {
+                if staticPreview {
+                    Label("刷新 " + RefreshPolicy.label(monitor.refreshInterval), systemImage: "arrow.clockwise")
+                    Spacer()
+                    Text("详情")
+                    Image(systemName: "gearshape")
+                } else {
+                    Menu {
+                        ForEach(RefreshPolicy.presets, id: \.self) { interval in
+                            Button {
+                                monitor.setRefreshInterval(interval)
+                                showCustomInterval = false
+                            } label: {
+                                if interval == monitor.refreshInterval {
+                                    Label(RefreshPolicy.label(interval), systemImage: "checkmark")
+                                } else { Text(RefreshPolicy.label(interval)) }
+                            }
+                        }
+                        Divider()
+                        Button("立即刷新") { monitor.refresh() }
+                        Button("自定义…") {
+                            customInterval = String(format: "%g", monitor.refreshInterval)
+                            invalidInterval = false
+                            showCustomInterval = true
+                        }
+                    } label: {
+                        Label("刷新 " + RefreshPolicy.label(monitor.refreshInterval), systemImage: "arrow.clockwise")
+                    }.menuStyle(.borderlessButton).fixedSize().help("调整电流数据刷新间隔")
+                    Spacer(minLength: 0)
+                    Button { showDetails.toggle() } label: {
+                        HStack(spacing: 4) {
+                            Text("详情")
+                            Image(systemName: showDetails ? "chevron.up" : "chevron.down").font(.system(size: 8))
+                        }
+                    }.buttonStyle(.plain)
+                    Menu {
+                        Toggle(startup.menuTitle, isOn: Binding(get: { startup.registered }, set: { startup.setEnabled($0) }))
+                        Toggle("启动时展开面板", isOn: $showOnLaunch)
+                        Button(startup.state == .requiresApproval ? "在系统设置中允许…" : "系统登录项设置…") { startup.openSystemSettings() }
+                        Divider()
+                        Toggle("流动动效", isOn: Binding(get: { !reduceMotion }, set: { reduceMotion = !$0 }))
+                        Divider()
+                        Button("实时硬件数据") { monitor.selectDemo(nil) }
+                        Menu("演示") {
+                            Button("边用边充") { monitor.selectDemo(0) }
+                            Button("电池供电") { monitor.selectDemo(1) }
+                            Button("电池待机") { monitor.selectDemo(2) }
+                            Button("共同供电") { monitor.selectDemo(3) }
+                        }
+                        Divider()
+                        Button("关于电流脉动 \(AppInfo.version)") { AppInfo.showAbout() }
+                        Button("退出电流脉动", action: quit)
+                    } label: { Image(systemName: "gearshape") }
+                        .menuStyle(.borderlessButton).fixedSize().help("设置与退出")
+                }
+            }
+            .font(.system(size: 10)).foregroundStyle(FlowStyle.muted)
+            .padding(.horizontal, 14).padding(.vertical, 11)
+        }.background(FlowStyle.background)
+    }
+
+    private func detailRow(_ title: String, _ value: String) -> some View {
+        HStack { Text(title); Spacer(minLength: 4); Text(value).monospacedDigit() }
+    }
+}
+
+struct CurrentChart: View {
+    let values: [PowerSample]
+    var body: some View {
+        TimelineView(.periodic(from: .now, by: 1)) { timeline in
+            Canvas { context, size in
+                let samples = PowerHistory.recent(values, at: timeline.date)
+                let scale = max(1, samples.compactMap(\.amps).map(abs).max() ?? 1) * 1.12
+                func x(_ sample: PowerSample) -> Double { max(0, 1 - timeline.date.timeIntervalSince(sample.timestamp) / 60) * size.width }
+                func y(_ value: Double) -> Double { size.height / 2 - value / scale * (size.height / 2 - 3) }
+                var zero = Path()
+                zero.move(to: CGPoint(x: 0, y: size.height / 2))
+                zero.addLine(to: CGPoint(x: size.width, y: size.height / 2))
+                context.stroke(zero, with: .color(FlowStyle.line), style: StrokeStyle(lineWidth: 1, dash: [2, 4]))
+                for i in samples.indices where i > 0 {
+                    guard let a = samples[i - 1].amps, let b = samples[i].amps else { continue }
+                    var segment = Path()
+                    segment.move(to: CGPoint(x: x(samples[i - 1]), y: y(a)))
+                    segment.addLine(to: CGPoint(x: x(samples[i]), y: y(b)))
+                    context.stroke(segment, with: .color(b >= 0 ? FlowStyle.aqua : FlowStyle.amber), style: StrokeStyle(lineWidth: 1.6, lineCap: .round))
+                }
+                if let last = samples.last, let amps = last.amps {
+                    context.fill(Path(ellipseIn: CGRect(x: x(last) - 2, y: y(amps) - 2, width: 4, height: 4)), with: .color(amps >= 0 ? FlowStyle.aqua : FlowStyle.amber))
+                }
+            }
+        }.accessibilityLabel("电池电流最近一分钟趋势。正数充电，负数放电。")
+    }
+}

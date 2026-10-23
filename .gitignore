@@ -1,0 +1,8 @@
+.DS_Store
+build/
+.build/
+artifacts/
+.swiftpm/
+*.xcuserstate
+.env
+.env.*
