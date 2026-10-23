@@ -19,12 +19,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NSApp.setActivationPolicy(.accessory)
         monitor = PowerMonitor()
         windowController = FlowWindowController(monitor: monitor, quit: { NSApp.terminate(nil) })
-        statusItem = NSStatusBar.system.statusItem(withLength: 92)
+        statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         statusItem.autosaveName = "CurrentFlowCompactStatus-v3"
         if let button = statusItem.button {
             button.target = self
             button.action = #selector(togglePopover)
-            button.font = NSFont.monospacedDigitSystemFont(ofSize: 11, weight: .medium)
+            button.font = NSFont.monospacedDigitSystemFont(ofSize: 10.5, weight: .medium)
             button.imagePosition = .imageLeading
             button.setAccessibilityLabel("电流脉动。查看充电器和电池的实时电流、供电流向。")
         }
@@ -80,8 +80,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         guard let button = statusItem.button else { return }
         let s = monitor.snapshot
         let power = s.systemWatts.map { String(format: "%.1fW", $0) } ?? "—W"
-        statusItem.length = iconOnlyForCrowding ? 28 : 92
-        button.title = iconOnlyForCrowding ? "" : " \(power)"
+        statusItem.length = iconOnlyForCrowding ? 22 : NSStatusItem.variableLength
+        button.title = iconOnlyForCrowding ? "" : power
         button.setAccessibilityLabel("电脑实时功耗：\(reading(s.systemWatts, unit: "瓦", digits: 1))。点击查看供电流向。")
         button.toolTip = "\(monitor.demoMode == nil ? "" : "【模拟演示 · 非实测】\n")\(s.status)\n充电器输入：\(s.externalConnected ? reading(s.inputAmps, unit: "A") : "未连接")\n电池：\(reading(s.batteryAmps, unit: "A"))\n电脑用电：\(reading(s.systemWatts, unit: "W", digits: 1))\n点击查看动态供电图"
         updateStatusImage()
@@ -91,7 +91,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func updateStatusImage() {
         guard let button = statusItem.button else { return }
         let s = monitor.snapshot
-        let image = NSImage(size: NSSize(width: 26, height: 20), flipped: false) { [phase] _ in
+        let image = NSImage(size: NSSize(width: 16, height: 16), flipped: false) { [phase] _ in
+            NSGraphicsContext.saveGraphicsState()
+            defer { NSGraphicsContext.restoreGraphicsState() }
+            let transform = NSAffineTransform()
+            transform.translateX(by: 0, yBy: 2)
+            transform.scale(by: 16.0 / 26.0)
+            transform.concat()
             NSColor.labelColor.setStroke()
             let screen = NSBezierPath(roundedRect: NSRect(x: 2, y: 6, width: 22, height: 12), xRadius: 2, yRadius: 2)
             screen.lineWidth = 1.1; screen.stroke()

@@ -10,7 +10,7 @@ A native SwiftUI menu bar app with a compact 420 × 300 light panel. Live system
 
 ## Features
 
-- Live input, battery and whole-system power readings.
+- Compact, content-sized menu bar watts with a 16pt icon; live input, battery and whole-system power readings.
 - Directional animations for charging, discharging and combined adapter/battery supply.
 - Adjustable 0.5–300 second sampling, with saved preferences.
 - Launch at login through macOS `SMAppService`, with approval status and a System Settings shortcut.
