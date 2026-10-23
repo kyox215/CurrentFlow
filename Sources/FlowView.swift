@@ -218,14 +218,6 @@ struct FlowPanel: View {
                         Divider()
                         Toggle("流动动效", isOn: Binding(get: { !reduceMotion }, set: { reduceMotion = !$0 }))
                         Divider()
-                        Button("实时硬件数据") { monitor.selectDemo(nil) }
-                        Menu("演示") {
-                            Button("边用边充") { monitor.selectDemo(0) }
-                            Button("电池供电") { monitor.selectDemo(1) }
-                            Button("电池待机") { monitor.selectDemo(2) }
-                            Button("共同供电") { monitor.selectDemo(3) }
-                        }
-                        Divider()
                         Button("关于电流脉动 \(AppInfo.version)") { AppInfo.showAbout() }
                         Button("退出电流脉动", action: quit)
                     } label: { Image(systemName: "gearshape") }
