@@ -148,8 +148,8 @@ struct CurrentFlowMain {
                 for mode in 0..<4 {
                     monitor.selectDemo(mode)
                     monitor.history = (0..<60).map { i in
-                        let base = monitor.snapshot.batteryAmps ?? 0
-                        return PowerSample(timestamp: Date().addingTimeInterval(Double(i) - 59), amps: base + (mode == 2 ? 0 : sin(Double(i) * 0.3) * 0.15))
+                        let base = monitor.snapshot.systemWatts ?? 0
+                        return PowerSample(timestamp: Date().addingTimeInterval(Double(i) - 59), watts: max(0, base + sin(Double(i) * 0.3) * 3))
                     }
                     let renderer = ImageRenderer(content: FlowPanel(monitor: monitor, staticPreview: true, quit: {}))
                     renderer.scale = 2

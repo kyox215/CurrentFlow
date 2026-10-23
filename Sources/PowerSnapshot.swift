@@ -41,6 +41,7 @@ struct PowerSnapshot: Codable, Sendable {
     var systemSource: PowerDataSource = .systemCache
     var batteryUpdatedAt: Date?
     var inputUpdatedAt: Date?
+    var systemUpdatedAt: Date?
 
     var liveCurrents: Bool {
         (!batteryInstalled || (batteryAmps != nil && batterySource == .sensor)) &&
@@ -96,6 +97,7 @@ struct PowerSnapshot: Codable, Sendable {
            update <= s.timestamp.timeIntervalSince1970 + 5 {
             s.batteryUpdatedAt = Date(timeIntervalSince1970: update)
             s.inputUpdatedAt = s.batteryUpdatedAt
+            s.systemUpdatedAt = s.batteryUpdatedAt
         }
         func number(_ dict: [String: Any], _ key: String, max limit: Double = 1_000_000) -> Double? {
             guard let n = dict[key] as? NSNumber else { return nil }

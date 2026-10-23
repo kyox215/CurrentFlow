@@ -40,6 +40,7 @@ struct LiveSensorTests {
         check(live.batteryUpdatedAt == now && live.inputUpdatedAt == now, "使用传感器读取时刻")
         check(live.freshnessLabel(at: now, interval: 1).hasPrefix("采样"), "展示实际采样时间")
         check(live.freshnessLabel(at: now.addingTimeInterval(20), interval: 1).contains("20 秒未采样"), "停采样会显示超时，不继续宣称实时")
+        check(live.systemUpdatedAt == now, "直接整机功耗使用自己的采样时间")
         let fallback = PowerFusion.merge(cached, live: LiveSensorReadings(), external: true, at: now)
         check(!fallback.liveCurrents && fallback.batterySource == .systemCache, "传感器不可用明确回退缓存")
         check(fallback.freshnessLabel(at: now, interval: 1) == "系统缓存", "未知缓存时间不伪造刚更新")
@@ -50,11 +51,17 @@ struct LiveSensorTests {
         check(unplugged.flow == .discharging && unplugged.inputAmps == 0 && unplugged.inputWatts == 0, "拔电后不保留电源残留值")
         check(unplugged.adapterRatedWatts == nil && unplugged.inputVolts == nil, "清理断开电源信息")
         check(near(unplugged.systemWatts, 18.6) && unplugged.systemEstimated, "可用电池端推算功耗")
+        check(unplugged.systemUpdatedAt == now, "实时推算功耗记录当前测量时刻")
         let badVoltage = PowerFusion.merge(cached, live: LiveSensorReadings(batteryAmps: 5, batteryVolts: 25), external: true, at: now)
         check(badVoltage.batterySource == .systemCache, "不可信电池电压不能覆盖正确缓存")
         let stamp = Date().addingTimeInterval(-45)
         let old = PowerSnapshot.parse(["BatteryInstalled": true, "Voltage": 12400, "Amperage": 1000, "UpdateTime": stamp.timeIntervalSince1970])
         check(old.batteryUpdatedAt.map { abs($0.timeIntervalSince(stamp)) < 0.000001 } ?? false, "记录驱动实际更新时间，允许浮点转换的微秒误差")
+        check(old.systemUpdatedAt.map { abs($0.timeIntervalSince(stamp)) < 0.000001 } ?? false, "系统缓存功耗保留驱动更新时间")
+        var staleSystem = cached
+        staleSystem.systemUpdatedAt = stamp
+        let liveBatteryOnly = PowerFusion.merge(staleSystem, live: LiveSensorReadings(batteryAmps: 0, batteryVolts: 12.4), external: true, at: now)
+        check(liveBatteryOnly.systemUpdatedAt == stamp && liveBatteryOnly.batteryUpdatedAt == now, "电池实时读取不能刷新缓存整机功耗的时间")
         check(old.freshnessLabel(at: Date(), interval: 0.5).hasPrefix("缓存"), "高频读缓存仍显示缓存状态")
         print("PASS: \(count) live sensor checks — endian / signs / limits / fusion / fallback / freshness / disconnect")
     }

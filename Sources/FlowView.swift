@@ -156,13 +156,14 @@ struct FlowPanel: View {
     private var details: some View {
         VStack(alignment: .leading, spacing: 9) {
             HStack {
-                Text("电池电流 · A").font(.system(size: 10, weight: .medium))
+                Text("整机功耗 · W").font(.system(size: 10, weight: .medium))
+                if s.systemEstimated { Text("估算").font(.system(size: 9)) }
                 Spacer()
                 Text("近 1 分钟").font(.system(size: 9))
             }
-            CurrentChart(values: monitor.history).frame(height: 42)
+            SystemPowerChart(values: monitor.history).frame(height: 50)
             detailRow("电源功率上限", reading(s.adapterRatedWatts, unit: "W", digits: 0))
-            if !s.liveCurrents && monitor.demoMode == nil {
+            if s.systemSource == .systemCache && monitor.demoMode == nil {
                 Label("部分读数来自系统缓存", systemImage: "clock")
                     .font(.system(size: 9)).fixedSize(horizontal: false, vertical: true)
             }
@@ -209,7 +210,7 @@ struct FlowPanel: View {
                         }
                     }.buttonStyle(.plain)
                         .accessibilityValue(showDetails ? "已展开" : "已收起")
-                        .help(showDetails ? "收起电流趋势" : "展开电流趋势和电源功率上限")
+                        .help(showDetails ? "收起功耗趋势" : "展开整机功耗趋势和电源功率上限")
                     Menu {
                         Toggle(startup.menuTitle, isOn: Binding(get: { startup.registered }, set: { startup.setEnabled($0) }))
                         Toggle("启动时展开面板", isOn: $showOnLaunch)
@@ -244,30 +245,43 @@ struct FlowPanel: View {
     }
 }
 
-struct CurrentChart: View {
+struct SystemPowerChart: View {
     let values: [PowerSample]
     var body: some View {
         TimelineView(.periodic(from: .now, by: 1)) { timeline in
-            Canvas { context, size in
-                let samples = PowerHistory.recent(values, at: timeline.date)
-                let scale = max(1, samples.compactMap(\.amps).map(abs).max() ?? 1) * 1.12
-                func x(_ sample: PowerSample) -> Double { max(0, 1 - timeline.date.timeIntervalSince(sample.timestamp) / 60) * size.width }
-                func y(_ value: Double) -> Double { size.height / 2 - value / scale * (size.height / 2 - 3) }
-                var zero = Path()
-                zero.move(to: CGPoint(x: 0, y: size.height / 2))
-                zero.addLine(to: CGPoint(x: size.width, y: size.height / 2))
-                context.stroke(zero, with: .color(FlowStyle.line), style: StrokeStyle(lineWidth: 1, dash: [2, 4]))
-                for i in samples.indices where i > 0 {
-                    guard let a = samples[i - 1].amps, let b = samples[i].amps else { continue }
-                    var segment = Path()
-                    segment.move(to: CGPoint(x: x(samples[i - 1]), y: y(a)))
-                    segment.addLine(to: CGPoint(x: x(samples[i]), y: y(b)))
-                    context.stroke(segment, with: .color(b >= 0 ? FlowStyle.aqua : FlowStyle.amber), style: StrokeStyle(lineWidth: 1.6, lineCap: .round))
-                }
-                if let last = samples.last, let amps = last.amps {
-                    context.fill(Path(ellipseIn: CGRect(x: x(last) - 2, y: y(amps) - 2, width: 4, height: 4)), with: .color(amps >= 0 ? FlowStyle.aqua : FlowStyle.amber))
+            let samples = PowerHistory.recent(values, at: timeline.date)
+            let scale = PowerHistory.upperBound(for: samples)
+            HStack(spacing: 6) {
+                VStack(alignment: .trailing) {
+                    Text(String(format: "%.0f W", scale))
+                    Spacer()
+                    Text("0")
+                }.font(.system(size: 8)).monospacedDigit().frame(width: 30)
+                Canvas { context, size in
+                    func x(_ sample: PowerSample) -> Double { max(0, 1 - timeline.date.timeIntervalSince(sample.timestamp) / 60) * (size.width - 4) + 2 }
+                    func y(_ value: Double) -> Double { size.height - 3 - value / scale * (size.height - 6) }
+                    for level in [0.0, scale / 2, scale] {
+                        var grid = Path()
+                        grid.move(to: CGPoint(x: 0, y: y(level)))
+                        grid.addLine(to: CGPoint(x: size.width, y: y(level)))
+                        context.stroke(grid, with: .color(FlowStyle.line), style: StrokeStyle(lineWidth: 0.5, dash: [2, 4]))
+                    }
+                    for i in samples.indices where i > 0 {
+                        guard let a = samples[i - 1].watts, let b = samples[i].watts else { continue }
+                        var segment = Path()
+                        segment.move(to: CGPoint(x: x(samples[i - 1]), y: y(a)))
+                        segment.addLine(to: CGPoint(x: x(samples[i]), y: y(b)))
+                        context.stroke(segment, with: .color(FlowStyle.blue), style: StrokeStyle(lineWidth: 1.6, lineCap: .round))
+                    }
+                    if let last = samples.last, let watts = last.watts {
+                        context.fill(Path(ellipseIn: CGRect(x: x(last) - 2, y: y(watts) - 2, width: 4, height: 4)), with: .color(FlowStyle.blue))
+                    }
+                }.overlay {
+                    if !samples.contains(where: { $0.watts != nil }) {
+                        Text("等待功耗采样…").font(.system(size: 9))
+                    }
                 }
             }
-        }.accessibilityLabel("电池电流最近一分钟趋势。正数充电，负数放电。")
+        }.accessibilityLabel("整机功耗最近一分钟趋势，单位瓦。")
     }
 }

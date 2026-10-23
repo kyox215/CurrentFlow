@@ -150,11 +150,13 @@ enum PowerFusion {
             s.systemWatts = power
             s.systemEstimated = false
             s.systemSource = .sensor
+            s.systemUpdatedAt = date
         } else if s.batterySource == .sensor, (!s.externalConnected || s.inputSource == .sensor),
                   let input = s.inputWatts, let battery = s.batteryWatts, input - battery >= 0 {
             s.systemWatts = input - battery
             s.systemEstimated = true
             s.systemSource = .sensor
+            s.systemUpdatedAt = date
         }
         return s
     }

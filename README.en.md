@@ -15,7 +15,7 @@ A native SwiftUI menu bar app with a compact 420 × 300 light panel. Live system
 - Adjustable 0.5–300 second sampling, with saved preferences.
 - Launch at login through macOS `SMAppService`, with approval status and a System Settings shortcut.
 - Silent menu bar startup, with an optional “show panel on launch” setting.
-- Details expand the panel automatically, showing a one-minute battery-current chart and adapter power limit. Collapse restores the compact panel.
+- Details expand the panel automatically, showing a one-minute whole-system power chart in watts and adapter power limit. Collapse restores the compact panel.
 - Notch-aware positioning, scrolling when screen space is limited, and reduced-motion support.
 - Local-only operation: no account, network requests, telemetry, root access or additional driver.
 
@@ -56,7 +56,7 @@ build/电流脉动.app/Contents/MacOS/CurrentFlow --startup-status
 build/电流脉动.app/Contents/MacOS/CurrentFlow --render-preview artifacts
 ```
 
-There are 145 checks for parsing, sensor decoding, fallback behavior, window placement and detail resizing, sampling, history and startup settings. Login-item registration/removal, saved launch preferences and silent cold startup have also been tested locally. The operating system was not logged out or rebooted for these checks.
+There are 157 checks for parsing, sensor decoding, fallback behavior, window placement and detail resizing, sampling, history and startup settings. Login-item registration/removal, saved launch preferences and silent cold startup have also been tested locally. The operating system was not logged out or rebooted for these checks.
 
 Screenshots and animations in `docs/` use labeled demo data. See [CONTRIBUTING](CONTRIBUTING.md) before reporting compatibility issues; do not post battery serial numbers or full IORegistry dumps.
 

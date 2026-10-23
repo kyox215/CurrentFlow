@@ -97,9 +97,10 @@ final class PowerMonitor: ObservableObject {
         let now = Date()
         history = PowerHistory.recent(history, at: now)
         // Re-reading one cached hardware revision must not create fake samples.
-        if let updated = reading.batteryUpdatedAt,
-           history.last?.timestamp != updated, now.timeIntervalSince(updated) <= 60 {
-            history.append(PowerSample(timestamp: updated, amps: reading.batteryAmps))
+        let updated = demoMode != nil || reading.systemWatts == nil ? reading.timestamp : reading.systemUpdatedAt
+        if let updated, updated <= now, now.timeIntervalSince(updated) <= 60,
+           history.last.map({ $0.timestamp < updated }) ?? true {
+            history.append(PowerSample(timestamp: updated, watts: reading.systemWatts))
         }
         didUpdate?()
     }

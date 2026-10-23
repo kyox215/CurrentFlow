@@ -28,11 +28,16 @@ enum RefreshPolicy {
 
 struct PowerSample {
     let timestamp: Date
-    let amps: Double?
+    let watts: Double?
 }
 
 enum PowerHistory {
     static func recent(_ samples: [PowerSample], at now: Date) -> [PowerSample] {
         samples.filter { let age = now.timeIntervalSince($0.timestamp); return age >= 0 && age <= 60 }
+    }
+
+    static func upperBound(for samples: [PowerSample]) -> Double {
+        let peak = samples.compactMap(\.watts).filter { $0.isFinite && $0 >= 0 }.max() ?? 0
+        return max(5, ceil(peak * 1.1 / 5) * 5)
     }
 }
