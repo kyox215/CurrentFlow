@@ -18,6 +18,7 @@ xcrun swiftc -module-cache-path "$BUILD/module-cache" -framework Cocoa \
 "$BUILD/MakeAppIcon" "$STAGING/AppIcon.iconset"
 /usr/bin/iconutil -c icns "$STAGING/AppIcon.iconset" -o "$STAGED_APP/Contents/Resources/AppIcon.icns"
 cp "$TASK_ROOT/Resources/使用说明.txt" "$STAGED_APP/Contents/Resources/使用说明.txt"
+cp "$TASK_ROOT/LICENSE" "$STAGED_APP/Contents/Resources/LICENSE"
 # Sign outside File Provider folders: they can race to attach FinderInfo.
 /usr/bin/xattr -cr "$STAGED_APP"
 /usr/bin/codesign --force --sign - "$STAGED_APP"
@@ -30,6 +31,7 @@ mkdir -p "$STAGING/distribution"
 /usr/bin/ditto --noextattr --norsrc "$STAGED_APP" "$STAGING/distribution/电流脉动.app"
 ln -s /Applications "$STAGING/distribution/Applications"
 cp "$TASK_ROOT/Resources/使用说明.txt" "$STAGING/distribution/安装说明.txt"
+cp "$TASK_ROOT/LICENSE" "$STAGING/distribution/LICENSE"
 /usr/bin/hdiutil create -quiet -volname "电流脉动" -srcfolder "$STAGING/distribution" \
   -format UDZO -ov "$STAGING/电流脉动-$APP_VERSION.dmg"
 cp "$STAGING/电流脉动-$APP_VERSION.dmg" "$TASK_ROOT/artifacts/电流脉动-$APP_VERSION.dmg"
