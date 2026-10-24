@@ -1,10 +1,20 @@
+<div align="center">
+
+<img src="docs/currentflow-banner.svg" alt="CurrentFlow — native power monitoring for Mac" width="100%" />
+
 # 电流脉动 · CurrentFlow
 
-**一眼看懂 Mac 的实时功耗，以及电源、电池与电脑之间的供电流向。**
+**看见功耗，也看懂流向。**
+
+[**下载最新版 ↗**](https://github.com/kyox215/CurrentFlow/releases/latest) · [English](README.en.md) · [Changelog](CHANGELOG.md) · [MIT](LICENSE)
+
+`macOS 13+` · `Apple Silicon` · `SwiftUI` · `Local only`
+
+</div>
 
 原生 SwiftUI 菜单栏应用，白色主题、420 × 300 的紧凑面板。菜单栏直接显示整机实时功耗，例如 `23.4W`；展开后，左侧电源、右上主板、右下电池通过带方向的流动动画连接。功率 W 用大字，电流 A 和电压 V 用小字，读数分清主次。
 
-[English](README.en.md) · [下载最新版](https://github.com/kyox215/CurrentFlow/releases/latest) · [更新记录](CHANGELOG.md) · [MIT 许可证](LICENSE)
+---
 
 **最新版本 [v0.7.4](https://github.com/kyox215/CurrentFlow/releases/tag/v0.7.4)**：设置已移除“演示”和“实时硬件数据”入口，正常运行自动读取硬件。近期更新还加入了整机功耗 W 趋势、详情自动展开，并将两位整数功耗时的菜单栏宽度从 92pt 缩至本机实测约 73pt。[查看中文更新介绍稿](docs/updates/0.7.4.zh-CN.txt)。
 

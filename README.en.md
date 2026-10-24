@@ -1,10 +1,20 @@
+<div align="center">
+
+<img src="docs/currentflow-banner.svg" alt="CurrentFlow — native power monitoring for Mac" width="100%" />
+
 # CurrentFlow · 电流脉动
 
-**See your Mac's live power draw and where its power is flowing.**
+**See the watts. Follow the flow.**
+
+[**Download for Mac ↗**](https://github.com/kyox215/CurrentFlow/releases/latest) · [中文](README.md) · [Changelog](CHANGELOG.md) · [MIT](LICENSE)
+
+`macOS 13+` · `Apple Silicon` · `SwiftUI` · `Local only`
+
+</div>
 
 A native SwiftUI menu bar app with a compact 420 × 300 light panel. Live system watts appear directly in the menu bar. The panel connects three nodes: power input on the left, system board at the upper right, and battery at the lower right. Watts take priority; amps and volts are secondary.
 
-[中文](README.md) · [Download](https://github.com/kyox215/CurrentFlow/releases/latest) · [MIT License](LICENSE)
+---
 
 **Latest: [v0.7.4](https://github.com/kyox215/CurrentFlow/releases/tag/v0.7.4).** Settings now omits the Demo and Live Hardware Data actions; normal operation reads hardware automatically. Recent releases also added a whole-system watt trend, automatic detail expansion, and a smaller menu bar item measuring about 73pt on the tested Mac for two-digit watt readings, down from 92pt. [Chinese update copy](docs/updates/0.7.4.zh-CN.txt).
 

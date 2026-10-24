@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="360" viewBox="0 0 1200 360" role="img" aria-labelledby="title desc">
+<title id="title">CurrentFlow</title><desc id="desc">A native Mac power monitor. An abstract diagram connects power input, the computer, and its battery.</desc>
+<defs><linearGradient id="bg" x2="1" y2="1"><stop stop-color="#f7fafc"/><stop offset="1" stop-color="#edf7f5"/></linearGradient><linearGradient id="accent"><stop stop-color="#287cff"/><stop offset="1" stop-color="#18ab89"/></linearGradient><filter id="shadow" x="-50%" y="-50%" width="200%" height="200%"><feDropShadow dy="9" stdDeviation="16" flood-color="#173d57" flood-opacity=".09"/></filter><pattern id="dots" width="24" height="24" patternUnits="userSpaceOnUse"><circle cx="1" cy="1" r="1" fill="#ccdadf" opacity=".6"/></pattern></defs>
+<rect width="1200" height="360" rx="24" fill="url(#bg)"/><rect width="1200" height="360" rx="24" fill="url(#dots)"/>
+<rect x="48" y="48" width="52" height="52" rx="16" fill="#fff" stroke="#dce7eb"/>
+<path d="M77 59 65 77h10l-4 13 15-20H76l1-11Z" fill="url(#accent)"/>
+<text x="116" y="81" fill="#526575" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif" font-size="17" font-weight="600" letter-spacing="2">MADE FOR THE MENU BAR</text>
+<text x="48" y="182" fill="#172939" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif" font-size="72" font-weight="750" letter-spacing="-3">CurrentFlow</text>
+<text x="50" y="227" fill="#516876" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif" font-size="24">See the watts. Follow the flow.</text>
+<rect x="50" y="271" width="108" height="32" rx="16" fill="#dfeef3"/><text x="104" y="292" text-anchor="middle" fill="#355c70" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif" font-size="13" font-weight="600">NATIVE macOS</text>
+<g fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M785 180h37q20 0 20-20v-41q0-20 20-20h48" stroke="#3f8df6" stroke-width="3"/><path d="M785 180h37q20 0 20 20v41q0 20 20 20h48" stroke="#18ab89" stroke-width="3"/><path d="M962 147v65" stroke="#bccdd5" stroke-width="2" stroke-dasharray="5 8"/></g>
+<g filter="url(#shadow)"><rect x="676" y="126" width="108" height="108" rx="27" fill="#fff" stroke="#dce7eb"/><rect x="908" y="47" width="108" height="108" rx="27" fill="#fff" stroke="#dce7eb"/><rect x="908" y="207" width="108" height="108" rx="27" fill="#fff" stroke="#dce7eb"/></g>
+<g fill="none" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><path d="M720 166v-12m20 12v-12m-25 12h30v13a15 15 0 0 1-30 0v-13Zm15 29v13" stroke="#3f8df6"/><rect x="940" y="78" width="44" height="31" rx="4" stroke="#3f8df6"/><path d="M932 117h60" stroke="#3f8df6"/><rect x="937" y="244" width="46" height="27" rx="5" stroke="#18ab89"/><path d="M987 252v10m-40-9h25m-25 9h19" stroke="#18ab89"/></g>
+<circle cx="815" cy="180" r="5" fill="#3f8df6"/><circle cx="881" cy="261" r="5" fill="#18ab89"/>
+<text x="1152" y="341" text-anchor="end" fill="#90a2ac" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif" font-size="11">POWER · SYSTEM · BATTERY</text>
+</svg>
