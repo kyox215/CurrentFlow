@@ -35,6 +35,9 @@ struct LiveSensorReadings: Sendable {
     var inputVolts: Double?
     var inputWatts: Double?
     var systemWatts: Double?
+    var displayWatts: Double?
+    var wifiWatts: Double?
+    var fanSpeeds: [FanSpeed] = []
 
     static func decode(_ values: [String: SensorValue], littleEndian: Bool) -> LiveSensorReadings {
         func valid(_ key: String, range: ClosedRange<Double>, scale: Double = 1) -> Double? {
@@ -48,7 +51,12 @@ struct LiveSensorReadings: Sendable {
             inputAmps: valid("ID0R", range: 0...30),
             inputVolts: valid("VD0R", range: 0...60),
             inputWatts: valid("PDTR", range: 0...1000),
-            systemWatts: valid("PSTR", range: 0...1000)
+            systemWatts: valid("PSTR", range: 0...1000),
+            displayWatts: valid("PBwo", range: 0...100) ?? valid("PDBR", range: 0...100),
+            wifiWatts: valid("wiPm", range: 0...30),
+            fanSpeeds: ["F0Ac", "F1Ac"].enumerated().compactMap { index, key in
+                valid(key, range: 0...20000).map { FanSpeed(id: index, rpm: $0) }
+            }
         )
     }
 }
@@ -60,7 +68,9 @@ final class LiveSensorConnection {
     private var metadata: [String: (UInt32, String)] = [:]
     private var missingKeys = Set<String>()
     private(set) var broken = false
-    static let keys = ["B0AC", "B0AV", "ID0R", "VD0R", "PDTR", "PSTR"]
+    static let coreKeys = ["B0AC", "B0AV", "ID0R", "VD0R", "PDTR", "PSTR", "PBwo", "PDBR"]
+    static let detailKeys = ["wiPm", "F0Ac", "F1Ac"]
+    static let keys = coreKeys + detailKeys
 
     init?() {
         let service = IOServiceGetMatchingService(kIOMainPortDefault, IOServiceMatching("AppleSMC"))
@@ -105,9 +115,9 @@ final class LiveSensorConnection {
         return SensorValue(type: type, bytes: Array(output[48..<(48 + Int(size))]))
     }
 
-    func readValues() -> LiveSensorReadings {
+    func readValues(includeDetails: Bool = false) -> LiveSensorReadings {
         var values: [String: SensorValue] = [:]
-        for key in Self.keys { values[key] = read(key) }
+        for key in includeDetails ? Self.keys : Self.coreKeys { values[key] = read(key) }
         #if arch(arm64)
         return .decode(values, littleEndian: true)
         #else
@@ -121,6 +131,11 @@ enum PowerFusion {
         var s = cached
         if let external { s.externalConnected = external }
         s.timestamp = date
+        s.displayWatts = live.displayWatts
+        s.displayUpdatedAt = live.displayWatts == nil ? nil : date
+        s.wifiWatts = live.wifiWatts
+        s.fanSpeeds = live.fanSpeeds
+        s.detailSensorsUpdatedAt = live.wifiWatts != nil || !live.fanSpeeds.isEmpty ? date : nil
         if s.batteryInstalled, let volts = live.batteryVolts, let amps = live.batteryAmps,
            cached.batteryVolts.map({ abs($0 - volts) < 2 }) ?? true {
             s.batteryAmps = amps

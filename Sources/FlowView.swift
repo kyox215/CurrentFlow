@@ -23,7 +23,6 @@ enum FlowStyle {
 
 struct FlowPanel: View {
     @ObservedObject var monitor: PowerMonitor
-    @State private var showDetails = false
     @State private var showCustomInterval = false
     @State private var customInterval = "1"
     @State private var invalidInterval = false
@@ -32,10 +31,12 @@ struct FlowPanel: View {
     @StateObject private var startup = StartupSettings()
     @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
     var staticPreview = false
+    var previewDetails = false
     var onSizeChange: (CGSize) -> Void = { _ in }
     let quit: () -> Void
 
     private var s: PowerSnapshot { monitor.snapshot }
+    private var showDetails: Bool { monitor.detailsExpanded || (staticPreview && previewDetails) }
     private var batteryColor: Color { s.flow == .discharging ? FlowStyle.amber : FlowStyle.aqua }
 
     var body: some View {
@@ -43,9 +44,9 @@ struct FlowPanel: View {
             if staticPreview {
                 VStack(spacing: 0) {
                     mainContent(width: PanelPlacement.preferredSize.width)
-                    Spacer(minLength: 0)
                     footer
-                }.frame(width: PanelPlacement.preferredSize.width, height: PanelPlacement.preferredSize.height)
+                }.frame(width: PanelPlacement.preferredSize.width)
+                    .frame(minHeight: PanelPlacement.preferredSize.height, alignment: .top)
             } else {
                 GeometryReader { geometry in
                     VStack(spacing: 0) {
@@ -117,6 +118,8 @@ struct FlowPanel: View {
                 .frame(width: diagramWidth, height: FlowDiagram.designSize.height * scale, alignment: .topLeading)
                 .clipped()
 
+            componentPower
+
             if let error = s.error {
                 Text(error).font(.system(size: 10)).foregroundStyle(FlowStyle.amber).fixedSize(horizontal: false, vertical: true)
             }
@@ -154,6 +157,13 @@ struct FlowPanel: View {
     }
 
     private var details: some View {
+        VStack(spacing: 8) {
+            powerTrend
+            extraPowerDetails
+        }
+    }
+
+    private var powerTrend: some View {
         VStack(alignment: .leading, spacing: 9) {
             HStack {
                 Text("整机功耗 · W").font(.system(size: 10, weight: .medium))
@@ -163,12 +173,99 @@ struct FlowPanel: View {
             }
             SystemPowerChart(values: monitor.history).frame(height: 50)
             detailRow("电源功率上限", reading(s.adapterRatedWatts, unit: "W", digits: 0))
+            Text("CPU/GPU 为采样区间平均估算；屏幕仅含内置背光。分项不等于整机总和。")
+                .font(.system(size: 9)).fixedSize(horizontal: false, vertical: true)
             if s.systemSource == .systemCache && monitor.demoMode == nil {
                 Label("部分读数来自系统缓存", systemImage: "clock")
                     .font(.system(size: 9)).fixedSize(horizontal: false, vertical: true)
             }
         }.font(.system(size: 9)).foregroundStyle(FlowStyle.muted)
             .padding(10).background(FlowStyle.surface, in: RoundedRectangle(cornerRadius: 10))
+    }
+
+    private var extraPowerDetails: some View {
+        TimelineView(.periodic(from: .now, by: 1)) { timeline in
+            let fresh = s.detailSensorsUpdatedAt.map { (-1...max(3, monitor.refreshInterval * 2 + 1)).contains(timeline.date.timeIntervalSince($0)) } ?? false
+            VStack(alignment: .leading, spacing: 7) {
+                HStack(spacing: 5) {
+                    Label("Wi-Fi · 参考", systemImage: "wifi")
+                        .help("传感器返回的参考功耗，部分机型不会随网络流量实时变化。")
+                    Text(precisePowerReading(fresh ? s.wifiWatts : nil, estimated: true)).monospacedDigit().foregroundStyle(FlowStyle.ink)
+                    Spacer(minLength: 8)
+                    Label("风扇", systemImage: "fanblades")
+                    Text(fanReading(fresh ? s.fanSpeeds : []))
+                        .monospacedDigit().foregroundStyle(FlowStyle.ink)
+                }.font(.system(size: 10)).lineLimit(1).minimumScaleFactor(0.8)
+                FlowStyle.line.frame(height: 0.5)
+                HStack {
+                    Text("应用 / 进程 CPU 估算功耗").font(.system(size: 10, weight: .medium))
+                    Spacer()
+                    Text("前 3 · 每 2 秒").font(.system(size: 8))
+                }
+                processRanking(at: timeline.date)
+                    .frame(height: 56, alignment: .top)
+            }
+            .foregroundStyle(FlowStyle.muted)
+            .padding(10).background(FlowStyle.surface, in: RoundedRectangle(cornerRadius: 10))
+        }
+        .help("按应用合并辅助进程的 CPU 侧平均估算功耗，不含 GPU、磁盘和网络等全部耗电。收起详情后停止扫描排行。风扇仅显示转速。")
+    }
+
+    private func fanReading(_ fans: [FanSpeed]) -> String {
+        guard !fans.isEmpty else { return "— RPM" }
+        return fans.sorted { $0.id < $1.id }.map { String(format: "%.0f", $0.rpm) }.joined(separator: " / ") + " RPM"
+    }
+
+    @ViewBuilder private func processRanking(at now: Date) -> some View {
+        let result = staticPreview && monitor.demoMode != nil ? ProcessPowerSnapshot.preview() : monitor.processPower
+        if result.phase == .ready, result.isFresh(at: now), !result.rows.isEmpty {
+            VStack(spacing: 4) {
+                ForEach(result.rows) { row in
+                    HStack(spacing: 8) {
+                        Text(row.name).lineLimit(1).truncationMode(.middle)
+                        Spacer(minLength: 0)
+                        Text(precisePowerReading(row.watts, estimated: true)).monospacedDigit()
+                    }.font(.system(size: 10)).foregroundStyle(FlowStyle.ink)
+                        .help("\(row.name)，合计 \(row.processCount) 个活跃进程的 CPU 估算功耗")
+                }
+            }
+        } else {
+            Text(result.phase == .unavailable ? "系统未提供进程能耗读数" :
+                 result.phase == .ready && !result.isFresh(at: now) ? "读数已过期，等待新采样" :
+                 result.phase == .ready ? "当前暂无可排名的活跃进程" : "正在采样…")
+                .font(.system(size: 10)).padding(.top, 3)
+        }
+    }
+
+    private var componentPower: some View {
+        TimelineView(.periodic(from: .now, by: 1)) { timeline in
+            HStack(spacing: 0) {
+                componentCell("CPU", icon: "cpu", value: s.cpuWatts,
+                              updated: s.componentsUpdatedAt, estimated: true, at: timeline.date)
+                FlowStyle.line.frame(width: 0.5, height: 22)
+                componentCell("GPU", icon: "square.stack.3d.up", value: s.gpuWatts,
+                              updated: s.componentsUpdatedAt, estimated: true, at: timeline.date)
+                FlowStyle.line.frame(width: 0.5, height: 22)
+                componentCell("屏幕背光", icon: "display", value: s.displayWatts,
+                              updated: s.displayUpdatedAt, estimated: false, at: timeline.date)
+            }.padding(.vertical, 7)
+                .background(FlowStyle.surface, in: RoundedRectangle(cornerRadius: 9))
+        }
+        .help("CPU/GPU 显示采样区间平均估算功率；屏幕仅含内置屏背光，不含外接显示器。缺失或过期读数显示 —。")
+    }
+
+    private func componentCell(_ title: String, icon: String, value: Double?, updated: Date?,
+                               estimated: Bool, at now: Date) -> some View {
+        let fresh = updated.map { now.timeIntervalSince($0) <= max(3, monitor.refreshInterval * 2 + 1) } ?? false
+        let displayed = fresh ? value : nil
+        return VStack(spacing: 3) {
+            Label(title, systemImage: icon).font(.system(size: 9)).foregroundStyle(FlowStyle.muted)
+            Text((estimated && displayed != nil ? "≈" : "") + reading(displayed, unit: "W", digits: 1))
+                .font(.system(size: 14, weight: .semibold, design: .rounded)).monospacedDigit()
+                .foregroundStyle(displayed == nil ? FlowStyle.muted : FlowStyle.ink)
+                .lineLimit(1).minimumScaleFactor(0.75)
+        }.frame(maxWidth: .infinity)
+            .accessibilityElement(children: .combine)
     }
 
     private var footer: some View {
@@ -203,14 +300,14 @@ struct FlowPanel: View {
                         Label("刷新 " + RefreshPolicy.label(monitor.refreshInterval), systemImage: "arrow.clockwise")
                     }.menuStyle(.borderlessButton).fixedSize().help("调整电流数据刷新间隔")
                     Spacer(minLength: 0)
-                    Button { showDetails.toggle() } label: {
+                    Button { monitor.setDetailsExpanded(!showDetails) } label: {
                         HStack(spacing: 4) {
                             Text(showDetails ? "收起" : "详情")
                             Image(systemName: showDetails ? "chevron.up" : "chevron.down").font(.system(size: 8))
                         }
                     }.buttonStyle(.plain)
                         .accessibilityValue(showDetails ? "已展开" : "已收起")
-                        .help(showDetails ? "收起功耗趋势" : "展开整机功耗趋势和电源功率上限")
+                        .help(showDetails ? "收起功耗趋势" : "展开整机功耗趋势和分项功耗说明")
                     Menu {
                         Toggle(startup.menuTitle, isOn: Binding(get: { startup.registered }, set: { startup.setEnabled($0) }))
                         Toggle("启动时展开面板", isOn: $showOnLaunch)

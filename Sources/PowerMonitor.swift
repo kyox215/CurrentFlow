@@ -8,7 +8,14 @@ final class PowerMonitor: ObservableObject {
     @Published var history: [PowerSample] = []
     @Published private(set) var refreshInterval: TimeInterval
     @Published var demoMode: Int? = nil
-    @Published var panelVisible = false
+    @Published var panelVisible = false {
+        didSet {
+            if panelVisible != oldValue { reconcileDetails(); if panelVisible { refresh() } }
+        }
+    }
+    @Published private(set) var detailsExpanded = false
+    @Published private(set) var processPower = ProcessPowerSnapshot()
+    @Published private(set) var detailSampleCount = 0
     @Published private(set) var sampleCount = 0
     private var timer: Timer?
     private var wakeObserver: NSObjectProtocol?
@@ -20,13 +27,21 @@ final class PowerMonitor: ObservableObject {
     private var stopped = false
     var didUpdate: (() -> Void)?
     private let defaults: UserDefaults
-    private let readSource: @Sendable () -> PowerSnapshot
+    private let readSource: (@Sendable () -> PowerSnapshot)?
+    private let processSource: @Sendable () -> ProcessEnergyBatch
+    private var detailTimer: Timer?
+    private var detailTask: Task<Void, Never>?
+    private var detailGeneration = 0
+    private var processBaseline: ProcessEnergyBatch?
+    private var shouldSampleDetails: Bool { !stopped && panelVisible && detailsExpanded && demoMode == nil }
 
     init(defaults: UserDefaults = .standard,
          observeSystem: Bool = true,
-         readSource: @escaping @Sendable () -> PowerSnapshot = { PowerReader.read() }) {
+         readSource: (@Sendable () -> PowerSnapshot)? = nil,
+         processSource: @escaping @Sendable () -> ProcessEnergyBatch = { ProcessPowerReader.shared.read() }) {
         self.defaults = defaults
         self.readSource = readSource
+        self.processSource = processSource
         refreshInterval = RefreshPolicy.restored((defaults.object(forKey: RefreshPolicy.key) as? NSNumber)?.doubleValue)
         refresh()
         scheduleTimer()
@@ -35,6 +50,7 @@ final class PowerMonitor: ObservableObject {
             MainActor.assumeIsolated {
                 guard let self else { return }
                 self.history.removeAll()
+                self.reconcileDetails()
                 self.scheduleTimer()
                 self.refresh()
             }
@@ -79,8 +95,9 @@ final class PowerMonitor: ObservableObject {
         guard readTask == nil else { readPending = true; return }
         let currentGeneration = generation
         let source = readSource
+        let includeDetails = shouldSampleDetails
         readTask = Task { [weak self] in
-            let result = await Task.detached(priority: .utility) { source() }.value
+            let result = await Task.detached(priority: .utility) { source?() ?? PowerReader.read(includeDetails: includeDetails) }.value
             guard !Task.isCancelled, let self, !self.stopped, self.generation == currentGeneration else { return }
             self.readTask = nil
             self.apply(result)
@@ -88,6 +105,51 @@ final class PowerMonitor: ObservableObject {
                 self.readPending = false
                 self.refresh()
             }
+        }
+    }
+
+    func setDetailsExpanded(_ expanded: Bool) {
+        guard !stopped, expanded != detailsExpanded else { return }
+        detailsExpanded = expanded
+        reconcileDetails()
+        refresh()
+    }
+
+    private func reconcileDetails() {
+        detailGeneration += 1
+        detailTimer?.invalidate()
+        detailTimer = nil
+        processBaseline = nil
+        if demoMode != nil, detailsExpanded {
+            processPower = .preview()
+        } else {
+            processPower = ProcessPowerSnapshot(phase: shouldSampleDetails ? .sampling : .idle)
+        }
+        guard shouldSampleDetails else { return }
+        let timer = Timer(timeInterval: 2, repeats: true) { [weak self] _ in
+            MainActor.assumeIsolated { self?.refreshDetails() }
+        }
+        timer.tolerance = 0.1
+        detailTimer = timer
+        RunLoop.main.add(timer, forMode: .common)
+        refreshDetails()
+    }
+
+    private func refreshDetails() {
+        // Keep the in-flight slot through close/reopen. Detached reads cannot
+        // be interrupted safely, and a second scan must not overlap them.
+        guard shouldSampleDetails, detailTask == nil else { return }
+        let revision = detailGeneration, source = processSource
+        detailTask = Task { [weak self] in
+            let batch = await Task.detached(priority: .utility) { source() }.value
+            guard !Task.isCancelled, let self, !self.stopped else { return }
+            self.detailTask = nil
+            guard self.shouldSampleDetails else { return }
+            guard self.detailGeneration == revision else { self.refreshDetails(); return }
+            self.processPower = ProcessPowerPolicy.sample(previous: self.processBaseline, current: batch)
+            self.processBaseline = batch.available ? batch : nil
+            self.detailSampleCount += 1
+            self.didUpdate?()
         }
     }
 
@@ -111,6 +173,7 @@ final class PowerMonitor: ObservableObject {
         readTask = nil
         readPending = false
         demoMode = value
+        reconcileDetails()
         history.removeAll()
         refresh()
     }
@@ -118,6 +181,13 @@ final class PowerMonitor: ObservableObject {
     func stop() {
         stopped = true
         generation += 1
+        detailGeneration += 1
+        detailTimer?.invalidate()
+        detailTimer = nil
+        detailTask?.cancel()
+        detailTask = nil
+        processBaseline = nil
+        processPower = ProcessPowerSnapshot()
         timer?.invalidate()
         timer = nil
         readTask?.cancel()

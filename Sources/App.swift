@@ -139,9 +139,22 @@ struct CurrentFlowMain {
             let encoder = JSONEncoder()
             encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
             encoder.dateEncodingStrategy = .iso8601
-            if let data = try? encoder.encode(PowerReader.read()), let string = String(data: data, encoding: .utf8) {
+            _ = PowerReader.read(includeDetails: true)
+            Thread.sleep(forTimeInterval: 1)
+            if let data = try? encoder.encode(PowerReader.read(includeDetails: true)), let string = String(data: data, encoding: .utf8) {
                 print(string)
             }
+            return
+        }
+        if CommandLine.arguments.contains("--process-power") {
+            let source = ProcessPowerReader()
+            let previous = source.read()
+            Thread.sleep(forTimeInterval: 2)
+            let result = ProcessPowerPolicy.sample(previous: previous, current: source.read())
+            let encoder = JSONEncoder()
+            encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+            encoder.dateEncodingStrategy = .iso8601
+            if let data = try? encoder.encode(result), let text = String(data: data, encoding: .utf8) { print(text) }
             return
         }
         if let index = CommandLine.arguments.firstIndex(of: "--render-preview"), CommandLine.arguments.count > index + 1 {
@@ -180,6 +193,12 @@ struct CurrentFlowMain {
                         CGImageDestinationAddImage(destination, cgImage, [kCGImagePropertyGIFDictionary: [kCGImagePropertyGIFDelayTime: 1.0 / 16]] as CFDictionary)
                     }
                     guard CGImageDestinationFinalize(destination) else { throw NSError(domain: "GIF", code: 3) }
+                }
+                let renderer = ImageRenderer(content: FlowPanel(monitor: monitor, staticPreview: true, previewDetails: true, quit: {}))
+                renderer.scale = 2
+                if let cgImage = renderer.cgImage,
+                   let data = NSBitmapImageRep(cgImage: cgImage).representation(using: .png, properties: [:]) {
+                    try data.write(to: output.appendingPathComponent("preview-details.png"))
                 }
                 print("Rendered 4 previews and 2 animated GIFs to \(output.path)")
             } catch { fputs("Preview failed: \(error)\n", stderr); exit(1) }

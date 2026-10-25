@@ -17,6 +17,11 @@ enum PowerDataSource: String, Codable, Sendable {
     var title: String { self == .sensor ? "直接采样" : "系统缓存" }
 }
 
+struct FanSpeed: Identifiable, Codable, Sendable {
+    let id: Int
+    let rpm: Double
+}
+
 struct PowerSnapshot: Codable, Sendable {
     var timestamp = Date()
     var available = false
@@ -31,6 +36,15 @@ struct PowerSnapshot: Codable, Sendable {
     var inputVolts: Double?
     var inputWatts: Double?
     var systemWatts: Double?
+    var cpuWatts: Double?
+    var gpuWatts: Double?
+    var displayWatts: Double?
+    var componentsUpdatedAt: Date?
+    var componentSampleDuration: TimeInterval?
+    var displayUpdatedAt: Date?
+    var wifiWatts: Double?
+    var fanSpeeds: [FanSpeed] = []
+    var detailSensorsUpdatedAt: Date?
     var adapterRatedWatts: Double?
     var inputAmpsEstimated = false
     var inputWattsEstimated = false
@@ -164,8 +178,24 @@ struct PowerSnapshot: Codable, Sendable {
         d["AdapterDetails"] = ["Watts": 96]
         d["PowerTelemetryData"] = ["SystemCurrentIn": mode == 3 ? 900 : 2600, "SystemVoltageIn": 20000,
                                      "SystemPowerIn": mode == 3 ? 18000 : 52000, "SystemLoad": [20000, 18600, 52000, 27920][mode % 4]]
-        return parse(d)
+        var snapshot = parse(d)
+        snapshot.cpuWatts = [7.8, 5.2, 9.6, 11.4][mode % 4]
+        snapshot.gpuWatts = [1.4, 0.6, 2.1, 3.2][mode % 4]
+        snapshot.displayWatts = 2.3
+        snapshot.componentsUpdatedAt = snapshot.timestamp
+        snapshot.displayUpdatedAt = snapshot.timestamp
+        snapshot.componentSampleDuration = 1
+        snapshot.wifiWatts = 0.033
+        snapshot.fanSpeeds = [FanSpeed(id: 0, rpm: 2320), FanSpeed(id: 1, rpm: 2500)]
+        snapshot.detailSensorsUpdatedAt = snapshot.timestamp
+        return snapshot
     }
+}
+
+func precisePowerReading(_ value: Double?, estimated: Bool = false) -> String {
+    guard let value, value.isFinite, value >= 0 else { return "— W" }
+    let digits = value < 1 ? 3 : (value < 10 ? 2 : 1)
+    return (estimated ? "≈" : "") + reading(value, unit: "W", digits: digits)
 }
 
 func reading(_ value: Double?, unit: String, digits: Int = 2, magnitude: Bool = false) -> String {

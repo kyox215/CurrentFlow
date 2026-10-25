@@ -5,8 +5,8 @@ import IOKit.ps
 enum PowerReader {
     private static let live = LivePowerReader()
 
-    static func read() -> PowerSnapshot {
-        live.read()
+    static func read(includeDetails: Bool = false) -> PowerSnapshot {
+        live.read(includeDetails: includeDetails)
     }
 
     fileprivate static func readRegistry() -> PowerSnapshot {
@@ -34,8 +34,9 @@ private final class LivePowerReader: @unchecked Sendable {
     private let lock = NSLock()
     private var sensors: LiveSensorConnection?
     private var lastOpenAttempt = Date.distantPast
+    private let components = ComponentPowerReader()
 
-    func read() -> PowerSnapshot {
+    func read(includeDetails: Bool) -> PowerSnapshot {
         lock.lock()
         defer { lock.unlock() }
         let cached = PowerReader.readRegistry()
@@ -43,7 +44,7 @@ private final class LivePowerReader: @unchecked Sendable {
             lastOpenAttempt = Date()
             sensors = LiveSensorConnection()
         }
-        let readings = sensors?.readValues() ?? LiveSensorReadings()
+        let readings = sensors?.readValues(includeDetails: includeDetails) ?? LiveSensorReadings()
         if sensors?.broken == true { sensors = nil; lastOpenAttempt = .distantPast }
         var external: Bool?
         if let info = IOPSCopyPowerSourcesInfo()?.takeRetainedValue(),
@@ -51,6 +52,12 @@ private final class LivePowerReader: @unchecked Sendable {
             if type == "AC Power" { external = true }
             else if type == "Battery Power" { external = false }
         }
-        return PowerFusion.merge(cached, live: readings, external: external, at: Date())
+        var result = PowerFusion.merge(cached, live: readings, external: external, at: Date())
+        let parts = components.read()
+        result.cpuWatts = parts.cpuWatts
+        result.gpuWatts = parts.gpuWatts
+        result.componentsUpdatedAt = parts.sampledAt
+        result.componentSampleDuration = parts.duration
+        return result
     }
 }
