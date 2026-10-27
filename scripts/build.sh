@@ -10,7 +10,7 @@ mkdir -p "$BUILD/module-cache" "$STAGED_APP/Contents/MacOS" "$STAGED_APP/Content
 xcrun swiftc -swift-version 5 -O -parse-as-library \
   -target "$(uname -m)-apple-macosx13.0" \
   -module-cache-path "$BUILD/module-cache" \
-  -framework Cocoa -framework SwiftUI -framework IOKit -framework ServiceManagement \
+  -framework Cocoa -framework SwiftUI -framework IOKit -framework ServiceManagement -lsqlite3 \
   "$TASK_ROOT"/Sources/*.swift -o "$STAGED_APP/Contents/MacOS/CurrentFlow"
 cp "$TASK_ROOT/Info.plist" "$STAGED_APP/Contents/Info.plist"
 xcrun swiftc -module-cache-path "$BUILD/module-cache" -framework Cocoa \

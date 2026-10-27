@@ -33,6 +33,7 @@ struct FlowPanel: View {
     var staticPreview = false
     var previewDetails = false
     var onSizeChange: (CGSize) -> Void = { _ in }
+    var onShowHistory: () -> Void = {}
     let quit: () -> Void
 
     private var s: PowerSnapshot { monitor.snapshot }
@@ -159,6 +160,13 @@ struct FlowPanel: View {
     private var details: some View {
         VStack(spacing: 8) {
             powerTrend
+            Button(action: onShowHistory) {
+                Label("功耗历史 · 秒级记录 / 最近 7 天", systemImage: "clock.arrow.circlepath")
+                    .frame(maxWidth: .infinity)
+            }.buttonStyle(.bordered).disabled(monitor.demoMode != nil)
+            if let error = monitor.historyError {
+                Text("历史记录失败：" + error).font(.caption2).foregroundStyle(.red)
+            }
             extraPowerDetails
         }
     }

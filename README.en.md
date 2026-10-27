@@ -16,7 +16,11 @@ A native SwiftUI menu bar app with a compact 420pt-wide light panel. Live system
 
 ---
 
-**Latest: [v0.9.0](https://github.com/kyox215/CurrentFlow/releases/tag/v0.9.0).** CPU/GPU and internal-backlight watts join the compact panel. Details adds Wi-Fi reference watts, fan RPM and the top three app/process CPU power estimates. Sampling runs only where needed. [Download and introduction](https://www.chinatech.in/currentflow) · [Chinese update copy](docs/updates/0.9.0.zh-CN.txt).
+**Latest: [v0.10.0](https://github.com/kyox215/CurrentFlow/releases/tag/v0.10.0).** Record power locally at second resolution and explore the last seven days in a compact graphical history window. Its default size is 720 × 600; summary metrics, the chart, cursor and time controls stay together, with the overview in a popover at shorter heights. [Download and introduction](https://www.chinatech.in/currentflow) · [Chinese update copy](docs/updates/0.10.0.zh-CN.txt).
+
+![Compact seven-day history window, Chinese synthetic demo data](docs/history-compact.jpg)
+
+The history screenshot uses synthetic demo data, including a visible gap.
 
 ![CurrentFlow panel using explicitly labeled demo data](docs/preview.png)
 
@@ -83,10 +87,20 @@ build/电流脉动.app/Contents/MacOS/CurrentFlow --startup-status
 build/电流脉动.app/Contents/MacOS/CurrentFlow --render-preview artifacts
 ```
 
-There are 229 checks for parsing, sensor decoding, fallback behavior, window placement and detail resizing, sampling, history and startup settings. Login-item registration/removal, saved launch preferences and silent cold startup have also been tested locally. The operating system was not logged out or rebooted for these checks.
+The core checks cover parsing, sensors, fallback behavior, layout, sampling, startup settings and second-resolution history. Use the focused history and window scripts for those interactions. Check counts and pass/fail status belong to the actual run logs. Physical reboot, seven-day on-device endurance and broader hardware support still need verification in the relevant environments.
 
 Screenshots and animations in `docs/` use labeled demo data. See [CONTRIBUTING](CONTRIBUTING.md) before reporting compatibility issues; do not post battery serial numbers or full IORegistry dumps.
 
 ## License
 
 [MIT](LICENSE) © 2026 kyox215.
+
+## Second-resolution power history
+
+Details → Power history opens 5-minute, 15-minute, 1-hour, 24-hour and 7-day ranges. Collection continues with the panel closed and is independent of the display refresh setting; at most one raw observation is saved per second. SQLite stores the latest rolling 604,800 seconds locally in `~/Library/Application Support/CurrentFlow/history.sqlite3`. Long charts query at most 600 aggregate buckets; exact lookup loads eleven nearby seconds. Dates include a UTC offset to distinguish repeated daylight-saving hours.
+
+W is power; Wh integrates only valid adjacent observations within one uninterrupted session, using their actual elapsed time. Missing seconds, stale/invalid readings, sleep, restarts and clock changes break integration. Blue chart buckets are complete, orange buckets contain gaps, and blank areas have no valid power. Totals cover only the measured intervals, never the entire period when gaps exist. Second-level resolution does not imply sensor accuracy; existing cache/reference/estimated labels apply. Unavailable or >2-second-old power is NULL, never fabricated as zero. Demo observations are excluded. No recording occurs while asleep or after exit. Sampling prevents App Nap throttling while allowing normal system sleep, so slow display refresh still incurs one-second sensor collection overhead. Normal quit awaits the pending write; forced termination or power loss can lose the last in-flight record.
+
+Build an isolated review bundle with `bash scripts/build-history-candidate.sh`. The script prints the isolated `/private/tmp/currentflow-history-candidate.XXXXXXXX/CurrentFlow History.app` path; an optional output directory can be supplied (use a normal local directory to avoid File Provider signing metadata). It uses its own bundle ID/preferences and `CurrentFlow-History-Candidate` Application Support directory. `--history-directory /absolute/path` selects a separate database folder; `--history-window` opens the history window. The installed app is unaffected.
+
+The graphical history explorer adds 5/15-minute quick ranges, cursor-centered zoom down to 15 seconds, half-window panning, a draggable seven-day overview, and exact-second cursor readings. Hover/click/drag, arrow keys and accessibility actions share one bounded navigation state. Inspecting an older period pauses live following; refresh stays in that period and Return to latest explicitly resumes it. A compact summary row shows a sample-weighted mean, peak, measured energy and valid-data coverage. Exact-time entry and nearby-second details open on demand in popovers. Incomplete buckets are isolated and gaps are never connected. The page supports light/dark appearance, defaults to 720 × 600 and allows a minimum of 600 × 500. Shorter windows move the seven-day overview into a popover. UI reads are debounced, bounded, cancelled on close/minimize, and stale results cannot replace newer selections. Raw sampling and retention remain unchanged. Run `bash scripts/test-history-ui.sh` for focused state/async regression checks and `bash scripts/preview-history.sh` for a labelled, isolated synthetic-data native preview.

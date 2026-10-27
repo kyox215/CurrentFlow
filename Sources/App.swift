@@ -13,11 +13,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var phase: Double = 0
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        let others = NSRunningApplication.runningApplications(withBundleIdentifier: "local.currentflow.mac")
+        let others = NSRunningApplication.runningApplications(withBundleIdentifier: Bundle.main.bundleIdentifier ?? "local.currentflow.mac")
             .filter { $0.processIdentifier != ProcessInfo.processInfo.processIdentifier }
         guard others.isEmpty else { NSApp.terminate(nil); return }
         NSApp.setActivationPolicy(.accessory)
-        monitor = PowerMonitor()
+        let args = CommandLine.arguments
+        let historyStore: HistoryStore?
+        if let i = args.firstIndex(of: "--history-directory"), args.count > i + 1 {
+            historyStore = HistoryStore(url: URL(fileURLWithPath: args[i + 1], isDirectory: true).appendingPathComponent("history.sqlite3"))
+        } else { historyStore = nil }
+        monitor = PowerMonitor(historyStore: historyStore)
         windowController = FlowWindowController(monitor: monitor, quit: { NSApp.terminate(nil) })
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         statusItem.autosaveName = "CurrentFlowCompactStatus-v3"
@@ -33,6 +38,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             self?.windowController.recordLayout(menuTitle: self?.statusItem.button?.title)
         }
         updateStatus()
+        if args.contains("--history-window") {
+            windowController.showHistory()
+        }
         animationTimer = Timer(timeInterval: 0.25, repeats: true) { [weak self] _ in
             MainActor.assumeIsolated {
                 guard let self, !UserDefaults.standard.bool(forKey: "reduceFlowMotion"), !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion,
@@ -42,7 +50,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
         }
         RunLoop.main.add(animationTimer!, forMode: .common)
-        if StartupPolicy.shouldShowPanel(force: CommandLine.arguments.contains("--show"),
+        if !args.contains("--history-window"), StartupPolicy.shouldShowPanel(force: CommandLine.arguments.contains("--show"),
                                          firstLaunch: !UserDefaults.standard.bool(forKey: "didShowWelcome"),
                                          preferred: UserDefaults.standard.bool(forKey: StartupPolicy.showOnLaunchKey)) {
             UserDefaults.standard.set(true, forKey: "didShowWelcome")
@@ -51,7 +59,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
-        windowController.show(from: statusItem.button)
+        windowController.reopen(from: statusItem.button)
         return true
     }
 
@@ -119,6 +127,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         button.image = image
     }
 
+    func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        guard let monitor else { return .terminateNow }
+        monitor.stop()
+        Task {
+            await monitor.flushHistory()
+            sender.reply(toApplicationShouldTerminate: true)
+        }
+        return .terminateLater
+    }
+
     func applicationWillTerminate(_ notification: Notification) {
         animationTimer?.invalidate()
         monitor?.stop()
@@ -162,7 +180,7 @@ struct CurrentFlowMain {
             let output = URL(fileURLWithPath: CommandLine.arguments[index + 1], isDirectory: true)
             do {
                 try FileManager.default.createDirectory(at: output, withIntermediateDirectories: true)
-                let monitor = PowerMonitor()
+                let monitor = PowerMonitor(observeSystem: false)
                 monitor.panelVisible = true
                 for mode in 0..<4 {
                     monitor.selectDemo(mode)
